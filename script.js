@@ -33,15 +33,16 @@ function drawImage() {
 // Draw the crop area with a transparent rectangle showing the image
 function drawCropLayout() {
     ctx.save();
-    
-    // Darken the whole canvas
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+	
+	// Darken the whole canvas
+    ctx.fillStyle = 'rgba(0, 0, 0, 0)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
+		
     // Display the image inside the crop area
     ctx.globalCompositeOperation = 'destination-atop';
-    ctx.drawImage(image, cropRect.x, cropRect.y, cropRect.width, cropRect.height, cropRect.x, cropRect.y, cropRect.width, cropRect.height);
-    
+    // ctx.drawImage(image, cropRect.x, cropRect.y, cropRect.width, cropRect.height, cropRect.x, cropRect.y, cropRect.width, cropRect.height);
+
+	
     // Draw the border around the crop area
     ctx.globalCompositeOperation = 'source-over';
     ctx.strokeStyle = '#FF0000';
@@ -197,7 +198,7 @@ saveButton.addEventListener('click', () => {
     tempCanvas.width = cropRect.width;
     tempCanvas.height = cropRect.height;
 
-    tempCtx.drawImage(canvas, cropRect.x, cropRect.y, cropRect.width, cropRect.height, 0, 0, cropRect.width, cropRect.height);
+    tempCtx.drawImage(canvas, cropRect.x + 2, cropRect.y + 2 , cropRect.width - 4, cropRect.height - 4, 0, 0, cropRect.width - 4, cropRect.height - 4);
 
     // Replace the current image with the cropped version scaled to the full canvas
     image.src = tempCanvas.toDataURL('image/png');
