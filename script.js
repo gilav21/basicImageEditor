@@ -6,11 +6,13 @@ const uploadInput = document.getElementById('upload');
 const saveButton = document.getElementById('save');
 const cancelButton = document.getElementById('cancel');
 const saveToComputerButton = document.getElementById('saveToComputer');
+const resetImageButton = document.getElementById('resetImage');
 
 let cropMode = false;
 let rotation = 0;
 let zoomScale = 1;
 let image = new Image();
+let originalImage = new Image();
 let originalImageData = null;  // Save original image data for cancelling
 let cropRect = { x: 0, y: 0, width: 200, height: 200 };
 let draggingCrop = false;
@@ -72,13 +74,21 @@ uploadInput.addEventListener('change', (e) => {
     if (file) {
         const reader = new FileReader();
         reader.onload = function (event) {
-            image.src = event.target.result;
+			image = new Image();
+            image.src = event.target.result;			
             image.onload = function () {
                 drawImage();
             };
+			originalImage.src = image.src;
         };
         reader.readAsDataURL(file);
     }
+});
+
+// Reset the image to original image
+resetImageButton.addEventListener('click', () => {
+	image.src = originalImage.src;
+	drawImage();
 });
 
 canvas.addEventListener('mousedown', (e) => {
