@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canvas Image Editor</title>
+    <style>
+        #canvas {
+            border: 1px solid black;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <input type="file" id="upload" />
+    <button id="cropToggle">Toggle Crop</button>
+    <button id="rotate">Rotate 90°</button>
+    <button id="save" class="hidden">Save Crop</button>
+    <button id="cancel" class="hidden">Cancel</button>
+    <button id="saveToComputer">Save to Computer</button>
+    <canvas id="canvas" width="800" height="600"></canvas>
+    <script src="script.js"></script>
+</body>
+</html>
