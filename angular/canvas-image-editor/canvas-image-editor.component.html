@@ -1,0 +1,17 @@
+<div class="editor-container">
+  <div class="flex gap-2">
+    @if(!cropMode()) {
+    <input type="file" accept="image/*" id="upload" (change)="onUpload($event)" />
+    <button (click)="toggleCropMode()">{{ cropMode() ? 'Cancel' : 'Toggle Crop' }}</button>
+    <button (click)="rotateImage()">Rotate 90°</button>
+    <button (click)="resetImage()">Reset Image</button>
+    <button (click)="saveToComputer()">Save to Computer</button>
+    }
+    @if(cropMode()) {
+    <button (click)="saveCrop()">Save Crop</button>
+    <button (click)="cancelCrop()">Cancel</button>
+    }
+  </div>
+  <canvas #canvas id="canvas" [width]="canvasWidth()" [height]="canvasHeight()" (mousedown)="onMouseDown($event)"
+    (mousemove)="onMouseMove($event)" (mouseup)="onMouseUp()" (wheel)="onWheel($event)"></canvas>
+</div>
