@@ -1,4 +1,4 @@
-import { Component, ElementRef, input, signal, viewChild } from '@angular/core';
+import { Component, effect, ElementRef, input, output, signal, viewChild } from '@angular/core';
 
 @Component({
   selector: 'app-canvas-image-editor',
@@ -11,6 +11,14 @@ export class CanvasImageEditorComponent {
 
   canvasWidth = input<number>(800);
   canvasHeight = input<number>(600);
+  cropOutlineColor = input<string>('#FF0000');
+  backgroundColor = input<string>('transparent');
+  borderColor = input<string>('black');
+  buttonsBackgroundColor = input<string>('#5993aa');
+  buttonsTextColor = input<string>('white');
+  base64 = input<string>('');
+
+  imageDone = output<string>();
 
   canvasRef = viewChild<ElementRef>('canvas');
 
@@ -29,6 +37,15 @@ export class CanvasImageEditorComponent {
   startX = signal<number>(0);
   startY = signal<number>(0);
 
+  constructor() {
+    effect(() => {
+      if (this.base64()) {
+        if (!this.setImage(this.base64())) {
+          alert('תמונה לא תקנית');
+        }
+      }
+    });
+  }
   ngAfterViewInit() {
     this.ctx = this.canvasRef()?.nativeElement.getContext('2d')!;
   }
@@ -57,7 +74,7 @@ export class CanvasImageEditorComponent {
     this.ctx.globalCompositeOperation = 'destination-atop';
     // this.ctx.drawImage(this.image, this.cropRect.x, this.cropRect.y, this.cropRect.width, this.cropRect.height, this.cropRect.x, this.cropRect.y, this.cropRect.width, this.cropRect.height);
     this.ctx.globalCompositeOperation = 'source-over';
-    this.ctx.strokeStyle = '#FF0000';
+    this.ctx.strokeStyle = this.cropOutlineColor();
     this.ctx.lineWidth = 2;
     this.ctx.setLineDash([6]);
     this.ctx.strokeRect(this.cropRect.x, this.cropRect.y, this.cropRect.width, this.cropRect.height);
@@ -80,20 +97,27 @@ export class CanvasImageEditorComponent {
       const file = input.files[0];
       const reader = new FileReader();
       reader.onload = (e: any) => {
-        if (e.target.result.startsWith('data:image/')) {
-          this.image.src = e.target.result;
-          this.image.onload = () => {
-            this.drawImage();
-            this.originalImageData = this.ctx.getImageData(0, 0, this.canvasRef()?.nativeElement.width, this.canvasRef()?.nativeElement.height);
-          };
-        } else {
-          input.value = '';
+        if (!this.setImage(e.target.result)) {
           alert('יש להעלות תמונה בפורמט תמונה');
+          input.value = '';
         }
       };
       reader.readAsDataURL(file);
     }
   }
+
+  setImage(base64: string): boolean {
+    if (base64.startsWith('data:image/')) {
+      this.image.src = base64;
+      this.image.onload = () => {
+        this.drawImage();
+        this.originalImageData = this.ctx.getImageData(0, 0, this.canvasRef()?.nativeElement.width, this.canvasRef()?.nativeElement.height);
+      };
+      return true;
+    }
+    return false;
+  }
+
 
   rotateImage() {
     this.rotation.update(value => (value + 90) % 360);
@@ -124,10 +148,11 @@ export class CanvasImageEditorComponent {
   }
 
   saveToComputer() {
-    const link = document.createElement('a');
-    link.href = this.canvasRef()?.nativeElement.toDataURL('image/png');
-    link.download = 'image.png';
-    link.click();
+    // const link = document.createElement('a');
+    // link.href = this.canvasRef()?.nativeElement.toDataURL('image/png');
+    // link.download = 'image.png';
+    // link.click();
+    this.imageDone.emit(this.image.src);
   }
 
   resetImage() {

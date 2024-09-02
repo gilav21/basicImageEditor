@@ -1,17 +1,19 @@
-<div class="editor-container">
+<div class="editor-container" [style.background-color]="backgroundColor()">
   <div class="flex gap-2">
     @if(!cropMode()) {
-    <input type="file" accept="image/*" id="upload" (change)="onUpload($event)" />
-    <button (click)="toggleCropMode()">{{ cropMode() ? 'Cancel' : 'Toggle Crop' }}</button>
-    <button (click)="rotateImage()">Rotate 90°</button>
-    <button (click)="resetImage()">Reset Image</button>
-    <button (click)="saveToComputer()">Save to Computer</button>
+      @if(!base64()) {
+        <input type="file" accept="image/*" id="upload" (change)="onUpload($event)" />
+      }
+    <button class="button" (click)="toggleCropMode()" [style.background-color]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()">{{ cropMode() ? 'Cancel' : 'Toggle Crop' }}</button>
+    <button class="button" (click)="rotateImage()" [style.background-color]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()">Rotate 90°</button>
+    <button class="button" (click)="resetImage()" [style.background-color]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()">Reset Image</button>
+    <button class="button" (click)="saveToComputer()" [style.background-color]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()">Save to Computer</button>
     }
     @if(cropMode()) {
-    <button (click)="saveCrop()">Save Crop</button>
-    <button (click)="cancelCrop()">Cancel</button>
+    <button class="button" (click)="saveCrop()" [style.background-color]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()">Save Crop</button>
+    <button class="button" (click)="cancelCrop()" [style.background-color]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()">Cancel</button>
     }
   </div>
-  <canvas #canvas id="canvas" [width]="canvasWidth()" [height]="canvasHeight()" (mousedown)="onMouseDown($event)"
+  <canvas #canvas id="canvas" [width]="canvasWidth()" [height]="canvasHeight()" [style.borderColor]="borderColor()" (mousedown)="onMouseDown($event)"
     (mousemove)="onMouseMove($event)" (mouseup)="onMouseUp()" (wheel)="onWheel($event)"></canvas>
 </div>
