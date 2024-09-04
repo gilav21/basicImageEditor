@@ -26,6 +26,8 @@ export class CanvasImageEditorComponent {
   cropMode = signal<boolean>(false);
   rotation = signal<number>(0);
   zoomScale = signal<number>(1);
+  resizeCorner = signal<string | null>(null);
+
 
   image = new Image();
   originalImageData!: ImageData;
@@ -68,17 +70,40 @@ export class CanvasImageEditorComponent {
   }
 
   drawCropLayout() {
-    this.ctx.save();
-    this.ctx.fillStyle = 'rgba(0, 0, 0, 0)';
+    // Store the original image
+    const originalImageData = this.ctx.getImageData(0, 0, this.canvasRef()?.nativeElement.width, this.canvasRef()?.nativeElement.height);
+
+    // Draw semi-transparent gray overlay
+    this.ctx.fillStyle = 'rgba(128, 128, 128, 0.5)';
     this.ctx.fillRect(0, 0, this.canvasRef()?.nativeElement.width, this.canvasRef()?.nativeElement.height);
-    this.ctx.globalCompositeOperation = 'destination-atop';
-    // this.ctx.drawImage(this.image, this.cropRect.x, this.cropRect.y, this.cropRect.width, this.cropRect.height, this.cropRect.x, this.cropRect.y, this.cropRect.width, this.cropRect.height);
+
+    // Use 'destination-out' to clear the crop area
+    this.ctx.globalCompositeOperation = 'destination-out';
+    this.ctx.fillStyle = 'rgba(255, 255, 255, 1)';
+    this.ctx.fillRect(this.cropRect.x, this.cropRect.y, this.cropRect.width, this.cropRect.height);
+
+    // Reset composite operation
     this.ctx.globalCompositeOperation = 'source-over';
+
+    // Draw the original image only in the crop area
+    this.ctx.putImageData(originalImageData, 0, 0, this.cropRect.x, this.cropRect.y, this.cropRect.width, this.cropRect.height);
+
+    // Draw the crop outline
     this.ctx.strokeStyle = this.cropOutlineColor();
     this.ctx.lineWidth = 2;
     this.ctx.setLineDash([6]);
     this.ctx.strokeRect(this.cropRect.x, this.cropRect.y, this.cropRect.width, this.cropRect.height);
-    this.ctx.restore();
+
+    // Draw resize handles
+    const handleSize = 10;
+    const handleOffset = 5; // Offset to place handles outside the crop area
+    this.ctx.fillStyle = this.cropOutlineColor();
+
+    // // Corner handles
+    // this.ctx.fillRect(this.cropRect.x - handleSize - handleOffset, this.cropRect.y - handleSize - handleOffset, handleSize, handleSize); // Top-left
+    // this.ctx.fillRect(this.cropRect.x + this.cropRect.width + handleOffset, this.cropRect.y - handleSize - handleOffset, handleSize, handleSize); // Top-right
+    // this.ctx.fillRect(this.cropRect.x - handleSize - handleOffset, this.cropRect.y + this.cropRect.height + handleOffset, handleSize, handleSize); // Bottom-left
+    // this.ctx.fillRect(this.cropRect.x + this.cropRect.width + handleOffset, this.cropRect.y + this.cropRect.height + handleOffset, handleSize, handleSize); // Bottom-right
   }
 
   toggleCropMode() {
@@ -130,9 +155,22 @@ export class CanvasImageEditorComponent {
   saveCrop() {
     const tempCanvas = document.createElement('canvas');
     const tempCtx = tempCanvas.getContext('2d')!;
-    tempCanvas.width = this.cropRect.width;
-    tempCanvas.height = this.cropRect.height;
-    tempCtx.drawImage(this.canvasRef()?.nativeElement, this.cropRect.x + 2, this.cropRect.y + 2, this.cropRect.width - 4, this.cropRect.height - 4, 0, 0, this.cropRect.width - 4, this.cropRect.height - 4);
+    const offset = 2; // Small offset to avoid capturing border
+    tempCanvas.width = this.cropRect.width - 2 * offset;
+    tempCanvas.height = this.cropRect.height - 2 * offset;
+
+    tempCtx.drawImage(
+      this.canvasRef()?.nativeElement,
+      this.cropRect.x + offset,
+      this.cropRect.y + offset,
+      this.cropRect.width - 2 * offset,
+      this.cropRect.height - 2 * offset,
+      0,
+      0,
+      this.cropRect.width - 2 * offset,
+      this.cropRect.height - 2 * offset
+    );
+
     this.image.src = tempCanvas.toDataURL('image/png');
     this.image.onload = () => {
       this.drawImage();
@@ -172,16 +210,20 @@ export class CanvasImageEditorComponent {
 
   // Mouse event handlers
   onMouseDown(event: MouseEvent) {
-    if (!this.cropMode()) return; // Only handle if in crop mode
+    if (!this.cropMode()) return;
 
     const rect = this.canvasRef()?.nativeElement.getBoundingClientRect();
     this.startX.set(event.clientX - rect.left);
     this.startY.set(event.clientY - rect.top);
 
     if (this.isInCropArea(this.startX(), this.startY())) {
-      this.draggingCrop.set(true); // Start dragging crop area
-    } else if (this.isInResizeArea(this.startX(), this.startY())) {
-      this.resizingCrop.set(true); // Start resizing crop area
+      this.draggingCrop.set(true);
+    } else {
+      const corner = this.isInResizeArea(this.startX(), this.startY());
+      if (corner) {
+        this.resizingCrop.set(true);
+        this.resizeCorner.set(corner);
+      }
     }
   }
 
@@ -190,12 +232,14 @@ export class CanvasImageEditorComponent {
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
 
+    // Set cursor style
+    this.canvasRef()!.nativeElement.style.cursor = this.getCursorStyle(x, y);
+
     if (!this.cropMode()) {
       this.drawImage();
       this.drawZoomBox(x, y);
       return;
     }
-
 
     if (this.draggingCrop()) {
       const dx = x - this.startX();
@@ -205,18 +249,67 @@ export class CanvasImageEditorComponent {
       this.startX.set(x);
       this.startY.set(y);
     } else if (this.resizingCrop()) {
-      this.cropRect.width = Math.max(x - this.cropRect.x, 10); // Minimum width
-      this.cropRect.height = Math.max(y - this.cropRect.y, 10); // Minimum height
+      const resizeArea = this.resizeCorner();
+      let newWidth = this.cropRect.width;
+      let newHeight = this.cropRect.height;
+      let newX = this.cropRect.x;
+      let newY = this.cropRect.y;
+
+      switch (resizeArea) {
+        case 'top-left':
+          newWidth = this.cropRect.width + (this.cropRect.x - x);
+          newHeight = this.cropRect.height + (this.cropRect.y - y);
+          newX = x;
+          newY = y;
+          break;
+        case 'top-right':
+          newWidth = x - this.cropRect.x;
+          newHeight = this.cropRect.height + (this.cropRect.y - y);
+          newY = y;
+          break;
+        case 'bottom-left':
+          newWidth = this.cropRect.width + (this.cropRect.x - x);
+          newHeight = y - this.cropRect.y;
+          newX = x;
+          break;
+        case 'bottom-right':
+          newWidth = x - this.cropRect.x;
+          newHeight = y - this.cropRect.y;
+          break;
+        case 'left':
+          newWidth = this.cropRect.width + (this.cropRect.x - x);
+          newX = x;
+          break;
+        case 'right':
+          newWidth = x - this.cropRect.x;
+          break;
+        case 'top':
+          newHeight = this.cropRect.height + (this.cropRect.y - y);
+          newY = y;
+          break;
+        case 'bottom':
+          newHeight = y - this.cropRect.y;
+          break;
+      }
+
+      if (newWidth > 10 && newHeight > 10) {
+        this.cropRect.x = newX;
+        this.cropRect.y = newY;
+        this.cropRect.width = newWidth;
+        this.cropRect.height = newHeight;
+      }
     }
 
-    this.drawImage(); // Redraw image
-    this.drawCropLayout(); // Redraw crop layout
+    this.drawImage();
+    this.drawCropLayout();
   }
 
   onMouseUp() {
     this.draggingCrop.set(false);
     this.resizingCrop.set(false);
-    this.cornerResize.set(false);
+    this.resizeCorner.set(null);
+    this.canvasRef()!.nativeElement.style.cursor = 'default';
+
   }
 
   onWheel(event: WheelEvent) {
@@ -255,13 +348,47 @@ export class CanvasImageEditorComponent {
     return x > this.cropRect.x && x < this.cropRect.x + this.cropRect.width && y > this.cropRect.y && y < this.cropRect.y + this.cropRect.height;
   }
 
-  isInResizeArea(x: number, y: number): boolean {
-    const resizeMargin = 10; // Pixels around the crop area corners to detect resizing
-    return (
-      (x > this.cropRect.x - resizeMargin && x < this.cropRect.x + resizeMargin && y > this.cropRect.y - resizeMargin && y < this.cropRect.y + resizeMargin) || // Top-left corner
-      (x > this.cropRect.x + this.cropRect.width - resizeMargin && x < this.cropRect.x + this.cropRect.width + resizeMargin && y > this.cropRect.y - resizeMargin && y < this.cropRect.y + resizeMargin) || // Top-right corner
-      (x > this.cropRect.x - resizeMargin && x < this.cropRect.x + resizeMargin && y > this.cropRect.y + this.cropRect.height - resizeMargin && y < this.cropRect.y + this.cropRect.height + resizeMargin) || // Bottom-left corner
-      (x > this.cropRect.x + this.cropRect.width - resizeMargin && x < this.cropRect.x + this.cropRect.width + resizeMargin && y > this.cropRect.y + this.cropRect.height - resizeMargin && y < this.cropRect.y + this.cropRect.height + resizeMargin) // Bottom-right corner
-    );
+  isInResizeArea(x: number, y: number): string | null {
+    const handleSize = 10;
+    const handleOffset = 0;
+    const { x: cropX, y: cropY, width: cropWidth, height: cropHeight } = this.cropRect;
+
+    // Check corners
+    if (x >= cropX - handleSize - handleOffset && x <= cropX - handleOffset && y >= cropY - handleSize - handleOffset && y <= cropY - handleOffset) return 'top-left';
+    if (x >= cropX + cropWidth + handleOffset && x <= cropX + cropWidth + handleSize + handleOffset && y >= cropY - handleSize - handleOffset && y <= cropY - handleOffset) return 'top-right';
+    if (x >= cropX - handleSize - handleOffset && x <= cropX - handleOffset && y >= cropY + cropHeight + handleOffset && y <= cropY + cropHeight + handleSize + handleOffset) return 'bottom-left';
+    if (x >= cropX + cropWidth + handleOffset && x <= cropX + cropWidth + handleSize + handleOffset && y >= cropY + cropHeight + handleOffset && y <= cropY + cropHeight + handleSize + handleOffset) return 'bottom-right';
+
+    // Check sides
+    if (x >= cropX - handleSize - handleOffset && x <= cropX - handleOffset && y > cropY && y < cropY + cropHeight) return 'left';
+    if (x >= cropX + cropWidth + handleOffset && x <= cropX + cropWidth + handleSize + handleOffset && y > cropY && y < cropY + cropHeight) return 'right';
+    if (x > cropX && x < cropX + cropWidth && y >= cropY - handleSize - handleOffset && y <= cropY - handleOffset) return 'top';
+    if (x > cropX && x < cropX + cropWidth && y >= cropY + cropHeight + handleOffset && y <= cropY + cropHeight + handleSize + handleOffset) return 'bottom';
+
+    return null;
+  }
+
+  getCursorStyle(x: number, y: number): string {
+    if (!this.cropMode()) return 'default';
+
+    const resizeArea = this.isInResizeArea(x, y);
+    if (resizeArea) {
+      switch (resizeArea) {
+        case 'top-left':
+        case 'bottom-right':
+          return 'nwse-resize';
+        case 'top-right':
+        case 'bottom-left':
+          return 'nesw-resize';
+        case 'left':
+        case 'right':
+          return 'ew-resize';
+        case 'top':
+        case 'bottom':
+          return 'ns-resize';
+      }
+    }
+
+    return this.isInCropArea(x, y) ? 'move' : 'default';
   }
 }
