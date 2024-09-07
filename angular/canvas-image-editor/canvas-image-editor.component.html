@@ -8,6 +8,9 @@
     <button class="button" (click)="rotateImage()" [style.background-color]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()">Rotate 90°</button>
     <button class="button" (click)="resetImage()" [style.background-color]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()">Reset Image</button>
     <button class="button" (click)="saveToComputer()" [style.background-color]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()">Save to Computer</button>
+    <button class="button" (click)="sharpenImage()" [style.background-color]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()">Sharpen Image</button>
+    <button class="button" (click)="applyThreshold(200)" [style.background-color]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()">Apply Threshold</button>
+    <button class="button" (click)="highPassSharpen()" [style.background-color]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()">High Pass Sharpen</button>
     }
     @if(cropMode()) {
     <button class="button" (click)="saveCrop()" [style.background-color]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()">Save Crop</button>
