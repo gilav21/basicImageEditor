@@ -11,6 +11,7 @@ export class CanvasImageEditorComponent {
 
   canvasWidth = input<number>(800);
   canvasHeight = input<number>(600);
+  zoomSize = input<number>(100);
   cropOutlineColor = input<string>('#FF0000');
   backgroundColor = input<string>('transparent');
   borderColor = input<string>('black');
@@ -28,17 +29,17 @@ export class CanvasImageEditorComponent {
   rotation = signal<number>(0);
   zoomScale = signal<number>(1);
   resizeCorner = signal<string | null>(null);
+  draggingCrop = signal<boolean>(false);
+  resizingCrop = signal<boolean>(false);
+  cornerResize = signal<boolean>(false);
+  startX = signal<number>(0);
+  startY = signal<number>(0);
 
 
   image = new Image();
   originalImageData!: ImageData | undefined;
   beforeCropImageData!: ImageData;
   cropRect = { x: 0, y: 0, width: 200, height: 200 };
-  draggingCrop = signal<boolean>(false);
-  resizingCrop = signal<boolean>(false);
-  cornerResize = signal<boolean>(false);
-  startX = signal<number>(0);
-  startY = signal<number>(0);
 
   constructor() {
     effect(() => {
@@ -335,19 +336,18 @@ export class CanvasImageEditorComponent {
   }
 
   drawZoomBox(x: number, y: number) {
-    const zoomSize = 100;
     const zoomLevel = this.zoomScale;
 
-    const sx = x - zoomSize / (2 * zoomLevel());
-    const sy = y - zoomSize / (2 * zoomLevel());
-    const sw = zoomSize / zoomLevel();
-    const sh = zoomSize / zoomLevel();
+    const sx = x - this.zoomSize() / (2 * zoomLevel());
+    const sy = y - this.zoomSize() / (2 * zoomLevel());
+    const sw = this.zoomSize() / zoomLevel();
+    const sh = this.zoomSize() / zoomLevel();
 
     this.ctx.save();
     this.ctx.beginPath();
-    this.ctx.rect(x - zoomSize / 2, y - zoomSize / 2, zoomSize, zoomSize);
+    this.ctx.rect(x - this.zoomSize() / 2, y - this.zoomSize() / 2, this.zoomSize(), this.zoomSize());
     this.ctx.clip();
-    this.ctx.drawImage(this.canvasRef()?.nativeElement, sx, sy, sw, sh, x - zoomSize / 2, y - zoomSize / 2, zoomSize, zoomSize);
+    this.ctx.drawImage(this.canvasRef()?.nativeElement, sx, sy, sw, sh, x - this.zoomSize() / 2, y - this.zoomSize() / 2, this.zoomSize(), this.zoomSize());
     this.ctx.restore();
   }
 
@@ -524,5 +524,6 @@ highPassSharpen( amount: number = 1.0) {
   this.image.src = tempCanvas.toDataURL('image/png');
   this.drawImage();
 }
+
 
 }
