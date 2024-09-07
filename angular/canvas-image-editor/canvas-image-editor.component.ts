@@ -30,7 +30,7 @@ export class CanvasImageEditorComponent {
 
 
   image = new Image();
-  originalImageData!: ImageData;
+  originalImageData!: ImageData | undefined;
   beforeCropImageData!: ImageData;
   cropRect = { x: 0, y: 0, width: 200, height: 200 };
   draggingCrop = signal<boolean>(false);
@@ -48,6 +48,7 @@ export class CanvasImageEditorComponent {
       }
     });
   }
+
   ngAfterViewInit() {
     this.ctx = this.canvasRef()?.nativeElement.getContext('2d')!;
   }
@@ -119,6 +120,7 @@ export class CanvasImageEditorComponent {
   onUpload(event: Event) {
     const input = event.target as HTMLInputElement;
     if (input.files && input.files[0]) {
+      this.originalImageData = undefined;
       const file = input.files[0];
       const reader = new FileReader();
       reader.onload = (e: any) => {
@@ -136,7 +138,9 @@ export class CanvasImageEditorComponent {
       this.image.src = base64;
       this.image.onload = () => {
         this.drawImage();
-        this.originalImageData = this.ctx.getImageData(0, 0, this.canvasRef()?.nativeElement.width, this.canvasRef()?.nativeElement.height);
+        if (!this.originalImageData) {
+          this.originalImageData = this.ctx.getImageData(0, 0, this.canvasRef()?.nativeElement.width, this.canvasRef()?.nativeElement.height);
+        }
       };
       return true;
     }
@@ -202,10 +206,12 @@ export class CanvasImageEditorComponent {
     this.cropRect.y = 0;
     this.cropRect.width = this.canvasRef()?.nativeElement.width;
     this.cropRect.height = this.canvasRef()?.nativeElement.height;
-    this.ctx.putImageData(this.originalImageData, 0, 0);
-    this.saveCrop();
-    this.cropRect.width = 200;
-    this.cropRect.height = 200;
+    if (this.originalImageData) {
+      this.ctx.putImageData(this.originalImageData, 0, 0);
+      this.saveCrop();
+      this.cropRect.width = 200;
+      this.cropRect.height = 200;
+    }
   }
 
   // Mouse event handlers
@@ -391,4 +397,131 @@ export class CanvasImageEditorComponent {
 
     return this.isInCropArea(x, y) ? 'move' : 'default';
   }
+
+  applyThreshold(threshold: number) {
+    const imageData = this.ctx.getImageData(0, 0, this.canvasRef()?.nativeElement.width, this.canvasRef()?.nativeElement.height);
+    const data = imageData.data;
+
+    for (let i = 0; i < data.length; i += 4) {
+      const brightness = 0.34 * data[i] + 0.5 * data[i + 1] + 0.16 * data[i + 2];
+      const value = brightness > threshold ? 255 : 0; // Simple threshold
+
+      data[i] = data[i + 1] = data[i + 2] = value; // Apply threshold
+    }
+
+    const tempCanvas = document.createElement('canvas');
+    const tempCtx = tempCanvas.getContext('2d')!;
+    tempCanvas.width = this.canvasRef()?.nativeElement.width;
+    tempCanvas.height = this.canvasRef()?.nativeElement.height;
+    tempCtx.putImageData(imageData, 0, 0);
+    this.image.src = tempCanvas.toDataURL('image/png');
+    this.drawImage();
+  }
+
+sharpenImage() {
+  const imageData = this.ctx.getImageData(0, 0, this.canvasRef()?.nativeElement.width, this.canvasRef()?.nativeElement.height);
+  const data = imageData.data;
+  const weight = 1; // Sharpening weight
+
+  // Convolution matrix for a simple sharpen filter
+  const kernel = [
+    0, -1, 0,
+    -1, 5, -1,
+    0, -1, 0
+  ];
+
+  const side = Math.round(Math.sqrt(kernel.length));
+  const halfSide = Math.floor(side / 2);
+
+  const tempCanvas = document.createElement('canvas');
+  const tempCtx = tempCanvas.getContext('2d')!;
+  tempCanvas.width = this.canvasRef()?.nativeElement.width;
+  tempCanvas.height = this.canvasRef()?.nativeElement.height;
+
+  // Create a copy of the image data to apply the convolution
+  const output = tempCtx.createImageData(this.canvasRef()?.nativeElement.width, this.canvasRef()?.nativeElement.height);
+  const outputData = output.data;
+
+  for (let y = 0; y < this.canvasRef()?.nativeElement.height; y++) {
+    for (let x = 0; x < this.canvasRef()?.nativeElement.width; x++) {
+      let r = 0, g = 0, b = 0, a = 0;
+      for (let ky = -halfSide; ky <= halfSide; ky++) {
+        for (let kx = -halfSide; kx <= halfSide; kx++) {
+          const px = x + kx;
+          const py = y + ky;
+          if (px >= 0 && px < this.canvasRef()?.nativeElement.width && py >= 0 && py < this.canvasRef()?.nativeElement.height) {
+            const pos = (py * this.canvasRef()?.nativeElement.width + px) * 4;
+            const weight = kernel[(ky + halfSide) * side + (kx + halfSide)];
+            r += data[pos] * weight;
+            g += data[pos + 1] * weight;
+            b += data[pos + 2] * weight;
+            a += data[pos + 3] * weight;
+          }
+        }
+      }
+      const i = (y * this.canvasRef()?.nativeElement.width + x) * 4;
+      outputData[i] = r;
+      outputData[i + 1] = g;
+      outputData[i + 2] = b;
+      outputData[i + 3] = a;
+    }
+  }
+
+  tempCanvas.width = this.canvasRef()?.nativeElement.width;
+  tempCanvas.height = this.canvasRef()?.nativeElement.height;
+  tempCtx.putImageData(output, 0, 0);
+  this.image.src = tempCanvas.toDataURL('image/png');
+  this.drawImage();
+}
+
+highPassSharpen( amount: number = 1.0) {
+  const imageData = this.ctx.getImageData(0, 0, this.canvasRef()?.nativeElement.width, this.canvasRef()?.nativeElement.height);
+  const data = imageData.data;
+  const output = this.ctx.createImageData(this.canvasRef()?.nativeElement.width, this.canvasRef()?.nativeElement.height);
+  const outputData = output.data;
+
+  // Create a copy of the original image data for high-pass filtering
+  const highPassData = new Float32Array(data.length);
+
+  // Calculate high-pass filter
+  for (let y = 1; y < this.canvasRef()?.nativeElement.height - 1; y++) {
+    for (let x = 1; x < this.canvasRef()?.nativeElement.width - 1; x++) {
+      for (let c = 0; c < 3; c++) { // R, G, B channels
+        const i = (y * this.canvasRef()?.nativeElement.width + x) * 4 + c;
+        const originalValue = data[i];
+        const averageValue =
+          (data[((y - 1) * this.canvasRef()?.nativeElement.width + x - 1) * 4 + c] +
+            data[((y - 1) * this.canvasRef()?.nativeElement.width + x) * 4 + c] +
+            data[((y - 1) * this.canvasRef()?.nativeElement.width + x + 1) * 4 + c] +
+            data[(y * this.canvasRef()?.nativeElement.width + x - 1) * 4 + c] +
+            data[(y * this.canvasRef()?.nativeElement.width + x + 1) * 4 + c] +
+            data[((y + 1) * this.canvasRef()?.nativeElement.width + x - 1) * 4 + c] +
+            data[((y + 1) * this.canvasRef()?.nativeElement.width + x) * 4 + c] +
+            data[((y + 1) * this.canvasRef()?.nativeElement.width + x + 1) * 4 + c]) / 8;
+
+        highPassData[i] = originalValue - averageValue; // High-pass filter result
+      }
+    }
+  }
+
+  // Apply high-pass filter to sharpen the image
+  for (let i = 0; i < data.length; i += 4) {
+    outputData[i] = Math.min(255, Math.max(0, data[i] + amount * highPassData[i]));
+    outputData[i + 1] = Math.min(255, Math.max(0, data[i + 1] + amount * highPassData[i + 1]));
+    outputData[i + 2] = Math.min(255, Math.max(0, data[i + 2] + amount * highPassData[i + 2]));
+    outputData[i + 3] = data[i + 3]; // Preserve alpha channel
+  }
+
+  // Draw the sharpened image back to the canvas
+  const tempCanvas = document.createElement('canvas');
+  const tempCtx = tempCanvas.getContext('2d')!;
+  tempCanvas.width = this.canvasRef()?.nativeElement.width;
+  tempCanvas.height = this.canvasRef()?.nativeElement.height;
+  tempCanvas.width = this.canvasRef()?.nativeElement.width;
+  tempCanvas.height = this.canvasRef()?.nativeElement.height;
+  tempCtx.putImageData(output, 0, 0);
+  this.image.src = tempCanvas.toDataURL('image/png');
+  this.drawImage();
+}
+
 }
