@@ -14,6 +14,7 @@ export class CanvasImageEditorComponent {
   cropOutlineColor = input<string>('#FF0000');
   backgroundColor = input<string>('transparent');
   borderColor = input<string>('black');
+  borderStyle = input<string>('dashed');
   buttonsBackgroundColor = input<string>('#5993aa');
   buttonsTextColor = input<string>('white');
   base64 = input<string>('');
