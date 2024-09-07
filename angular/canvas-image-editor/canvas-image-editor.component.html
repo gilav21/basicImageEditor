@@ -1,22 +1,45 @@
 <div class="editor-container" [style.background-color]="backgroundColor()">
-  <div class="flex gap-2">
+  <div class="toolbar">
     @if(!cropMode()) {
       @if(!base64()) {
-        <input type="file" accept="image/*" id="upload" (change)="onUpload($event)" />
+        <button class="icon-button" (click)="upload.click()" [style.background]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()" title="Upload Image">
+          <i class="fa fa-upload"></i>
+        </button>
+        <input type="file" accept="image/*" #upload id="upload" (change)="onUpload($event)" style="display: none;" />
       }
-    <button class="button" (click)="toggleCropMode()" [style.background-color]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()">{{ cropMode() ? 'Cancel' : 'Toggle Crop' }}</button>
-    <button class="button" (click)="rotateImage()" [style.background-color]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()">Rotate 90°</button>
-    <button class="button" (click)="resetImage()" [style.background-color]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()">Reset Image</button>
-    <button class="button" (click)="saveToComputer()" [style.background-color]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()">Save to Computer</button>
-    <button class="button" (click)="sharpenImage()" [style.background-color]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()">Sharpen Image</button>
-    <button class="button" (click)="applyThreshold(200)" [style.background-color]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()">Apply Threshold</button>
-    <button class="button" (click)="highPassSharpen()" [style.background-color]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()">High Pass Sharpen</button>
+      <button class="icon-button" (click)="toggleCropMode()" [style.background]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()" title="Toggle Crop">
+        <i class="fa fa-crop"></i>
+      </button>
+      <button class="icon-button" (click)="rotateImage()" [style.background]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()" title="Rotate 90°">
+        <i class="fa fa-backward"></i>
+      </button>
+      <button class="icon-button" (click)="sharpenImage()" [style.background]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()" title="Sharpen Image">
+        <i class="fa fa-adjust"></i>
+      </button>
+      <button class="icon-button" (click)="applyThreshold(200)" [style.background]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()" title="Apply Threshold">
+        <i class="fa fa-sliders"></i>
+      </button>
+      <button class="icon-button" (click)="highPassSharpen()" [style.background]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()" title="High Pass Sharpen">
+        <i class="fa fa-magic"></i>
+      </button>
+      <button class="icon-button" (click)="saveToComputer()" [style.background]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()" title="Save Image">
+        <i class="fa fa-download"></i>
+      </button>
+      <button class="icon-button" (click)="resetImage()" [style.background]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()" title="Reset Image">
+        <i class="fa fa-undo"></i>
+      </button>
+
     }
     @if(cropMode()) {
-    <button class="button" (click)="saveCrop()" [style.background-color]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()">Save Crop</button>
-    <button class="button" (click)="cancelCrop()" [style.background-color]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()">Cancel</button>
+      <button class="icon-button" (click)="saveCrop()" [style.background]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()" title="Save Crop">
+        <i class="fa fa-check"></i>
+      </button>
+      <button class="icon-button" (click)="cancelCrop()" [style.background]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()" title="Cancel">
+        <i class="fa fa-times"></i>
+      </button>
     }
   </div>
-  <canvas #canvas id="canvas" [width]="canvasWidth()" [height]="canvasHeight()" [style.borderColor]="borderColor()" (mousedown)="onMouseDown($event)"
-    (mousemove)="onMouseMove($event)" (mouseup)="onMouseUp()" (wheel)="onWheel($event)"></canvas>
+  <canvas #canvas id="canvas" [width]="canvasWidth()" [height]="canvasHeight()"
+  [style.borderColor]="borderColor()" [style.borderStyle]="borderStyle()"
+  (mousedown)="onMouseDown($event)" (mousemove)="onMouseMove($event)" (mouseup)="onMouseUp()" (wheel)="onWheel($event)"></canvas>
 </div>
