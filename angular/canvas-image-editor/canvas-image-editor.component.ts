@@ -1,4 +1,5 @@
-import { Component, effect, ElementRef, input, output, signal, viewChild } from '@angular/core';
+import { Component, effect, ElementRef, input, output, signal, viewChild, ɵUSE_RUNTIME_DEPS_TRACKER_FOR_JIT } from '@angular/core';
+import { set } from 'lodash';
 
 @Component({
   selector: 'app-canvas-image-editor',
@@ -23,8 +24,10 @@ export class CanvasImageEditorComponent {
   imageDone = output<string>();
 
   canvasRef = viewChild<ElementRef>('canvas');
+  zoomCanvasRef = viewChild<ElementRef>('zoomCanvas');
 
   private ctx!: CanvasRenderingContext2D;
+  private zoomCtx!: CanvasRenderingContext2D;
   cropMode = signal<boolean>(false);
   rotation = signal<number>(0);
   zoomScale = signal<number>(1);
@@ -34,6 +37,7 @@ export class CanvasImageEditorComponent {
   cornerResize = signal<boolean>(false);
   startX = signal<number>(0);
   startY = signal<number>(0);
+  isLoading = signal<boolean>(false);
 
 
   image = new Image();
@@ -53,9 +57,13 @@ export class CanvasImageEditorComponent {
 
   ngAfterViewInit() {
     this.ctx = this.canvasRef()?.nativeElement.getContext('2d')!;
+    this.zoomCtx = this.zoomCanvasRef()?.nativeElement.getContext('2d')!;
+    this.ctx.imageSmoothingEnabled = true;
+    this.ctx.imageSmoothingQuality = 'high';
   }
 
   drawImage() {
+
     this.ctx.clearRect(0, 0, this.canvasRef()?.nativeElement.width, this.canvasRef()?.nativeElement.height);
     this.ctx.save();
 
@@ -68,7 +76,6 @@ export class CanvasImageEditorComponent {
 
     // Draw the image centered
     this.ctx.drawImage(this.image, -this.image.width / 2, -this.image.height / 2, this.image.width, this.image.height);
-
     this.ctx.restore();
   }
 
@@ -139,6 +146,8 @@ export class CanvasImageEditorComponent {
     if (base64.startsWith('data:image/')) {
       this.image.src = base64;
       this.image.onload = () => {
+        this.canvasRef()!.nativeElement.width = this.image.width;
+        this.canvasRef()!.nativeElement.height = this.image.height;
         this.drawImage();
         if (!this.originalImageData) {
           this.originalImageData = this.ctx.getImageData(0, 0, this.canvasRef()?.nativeElement.width, this.canvasRef()?.nativeElement.height);
@@ -221,8 +230,10 @@ export class CanvasImageEditorComponent {
     if (!this.cropMode()) return;
 
     const rect = this.canvasRef()?.nativeElement.getBoundingClientRect();
-    this.startX.set(event.clientX - rect.left);
-    this.startY.set(event.clientY - rect.top);
+
+    const [canvasX, canvasY] = this.getCanvasCoordinates(event);
+    this.startX.set(canvasX);
+    this.startY.set(canvasY);
 
     if (this.isInCropArea(this.startX(), this.startY())) {
       this.draggingCrop.set(true);
@@ -240,22 +251,27 @@ export class CanvasImageEditorComponent {
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
 
+    const [canvasX, canvasY] = this.getCanvasCoordinates(event);
     // Set cursor style
-    this.canvasRef()!.nativeElement.style.cursor = this.getCursorStyle(x, y);
+    this.canvasRef()!.nativeElement.style.cursor = this.getCursorStyle(canvasX, canvasY);
 
     if (!this.cropMode()) {
       this.drawImage();
-      this.drawZoomBox(x, y);
+      if (this.zoomScale() > 1) {
+        this.updateZoomWindow(x, y, canvasX, canvasY);
+      } else {
+        this.zoomCtx.clearRect(0, 0, this.zoomCanvasRef()?.nativeElement.width, this.zoomCanvasRef()?.nativeElement.height);
+      }
       return;
     }
 
     if (this.draggingCrop()) {
-      const dx = x - this.startX();
-      const dy = y - this.startY();
+      const dx = canvasX - this.startX();
+      const dy = canvasY - this.startY();
       this.cropRect.x += dx;
       this.cropRect.y += dy;
-      this.startX.set(x);
-      this.startY.set(y);
+      this.startX.set(canvasX);
+      this.startY.set(canvasY);
     } else if (this.resizingCrop()) {
       const resizeArea = this.resizeCorner();
       let newWidth = this.cropRect.width;
@@ -265,38 +281,38 @@ export class CanvasImageEditorComponent {
 
       switch (resizeArea) {
         case 'top-left':
-          newWidth = this.cropRect.width + (this.cropRect.x - x);
-          newHeight = this.cropRect.height + (this.cropRect.y - y);
-          newX = x;
-          newY = y;
+          newWidth = this.cropRect.width + (this.cropRect.x - canvasX);
+          newHeight = this.cropRect.height + (this.cropRect.y - canvasY);
+          newX = canvasX;
+          newY = canvasY;
           break;
         case 'top-right':
-          newWidth = x - this.cropRect.x;
-          newHeight = this.cropRect.height + (this.cropRect.y - y);
-          newY = y;
+          newWidth = canvasX - this.cropRect.x;
+          newHeight = this.cropRect.height + (this.cropRect.y - canvasY);
+          newY = canvasY;
           break;
         case 'bottom-left':
-          newWidth = this.cropRect.width + (this.cropRect.x - x);
-          newHeight = y - this.cropRect.y;
-          newX = x;
+          newWidth = this.cropRect.width + (this.cropRect.x - canvasX);
+          newHeight = canvasY - this.cropRect.y;
+          newX = canvasX;
           break;
         case 'bottom-right':
-          newWidth = x - this.cropRect.x;
-          newHeight = y - this.cropRect.y;
+          newWidth = canvasX - this.cropRect.x;
+          newHeight = canvasY - this.cropRect.y;
           break;
         case 'left':
-          newWidth = this.cropRect.width + (this.cropRect.x - x);
-          newX = x;
+          newWidth = this.cropRect.width + (this.cropRect.x - canvasX);
+          newX = canvasX;
           break;
         case 'right':
-          newWidth = x - this.cropRect.x;
+          newWidth = canvasX - this.cropRect.x;
           break;
         case 'top':
-          newHeight = this.cropRect.height + (this.cropRect.y - y);
-          newY = y;
+          newHeight = this.cropRect.height + (this.cropRect.y - canvasY);
+          newY = canvasY;
           break;
         case 'bottom':
-          newHeight = y - this.cropRect.y;
+          newHeight = canvasY - this.cropRect.y;
           break;
       }
 
@@ -321,34 +337,17 @@ export class CanvasImageEditorComponent {
   }
 
   onWheel(event: WheelEvent) {
+    event.preventDefault();
+    event.stopPropagation();
     if (this.cropMode()) return;
+
     const rect = this.canvasRef()?.nativeElement.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
-    this.zoomLens(x, y, event.deltaY);
-  }
 
-  zoomLens(x: number, y: number, deltaY: number) {
-    const zoomFactor = deltaY * -0.01;
-    this.zoomScale.update(value => Math.min(Math.max(value + zoomFactor, 1), 10));
-    this.drawImage();
-    this.drawZoomBox(x, y);
-  }
+    const [canvasX, canvasY] = this.getCanvasCoordinates(event);
 
-  drawZoomBox(x: number, y: number) {
-    const zoomLevel = this.zoomScale;
-
-    const sx = x - this.zoomSize() / (2 * zoomLevel());
-    const sy = y - this.zoomSize() / (2 * zoomLevel());
-    const sw = this.zoomSize() / zoomLevel();
-    const sh = this.zoomSize() / zoomLevel();
-
-    this.ctx.save();
-    this.ctx.beginPath();
-    this.ctx.rect(x - this.zoomSize() / 2, y - this.zoomSize() / 2, this.zoomSize(), this.zoomSize());
-    this.ctx.clip();
-    this.ctx.drawImage(this.canvasRef()?.nativeElement, sx, sy, sw, sh, x - this.zoomSize() / 2, y - this.zoomSize() / 2, this.zoomSize(), this.zoomSize());
-    this.ctx.restore();
+    this.zoom(x, y, canvasX, canvasY, event);
   }
 
   isInCropArea(x: number, y: number): boolean {
@@ -400,6 +399,7 @@ export class CanvasImageEditorComponent {
   }
 
   applyThreshold(threshold: number) {
+    this.isLoading.set(true);
     const imageData = this.ctx.getImageData(0, 0, this.canvasRef()?.nativeElement.width, this.canvasRef()?.nativeElement.height);
     const data = imageData.data;
 
@@ -417,113 +417,189 @@ export class CanvasImageEditorComponent {
     tempCtx.putImageData(imageData, 0, 0);
     this.image.src = tempCanvas.toDataURL('image/png');
     this.drawImage();
+    this.isLoading.set(false);
   }
 
-sharpenImage() {
-  const imageData = this.ctx.getImageData(0, 0, this.canvasRef()?.nativeElement.width, this.canvasRef()?.nativeElement.height);
-  const data = imageData.data;
-  const weight = 1; // Sharpening weight
+  sharpenImage() {
+    this.isLoading.set(true);
+    setTimeout(() => {
+      const imageData = this.ctx.getImageData(0, 0, this.canvasRef()?.nativeElement.width, this.canvasRef()?.nativeElement.height);
+      const data = imageData.data;
+      const weight = 1; // Sharpening weight
 
-  // Convolution matrix for a simple sharpen filter
-  const kernel = [
-    0, -1, 0,
-    -1, 5, -1,
-    0, -1, 0
-  ];
+      // Convolution matrix for a simple sharpen filter
+      const kernel = [
+        0, -1, 0,
+        -1, 5, -1,
+        0, -1, 0
+      ];
 
-  const side = Math.round(Math.sqrt(kernel.length));
-  const halfSide = Math.floor(side / 2);
+      const side = Math.round(Math.sqrt(kernel.length));
+      const halfSide = Math.floor(side / 2);
 
-  const tempCanvas = document.createElement('canvas');
-  const tempCtx = tempCanvas.getContext('2d')!;
-  tempCanvas.width = this.canvasRef()?.nativeElement.width;
-  tempCanvas.height = this.canvasRef()?.nativeElement.height;
+      const tempCanvas = document.createElement('canvas');
+      const tempCtx = tempCanvas.getContext('2d')!;
+      tempCanvas.width = this.canvasRef()?.nativeElement.width;
+      tempCanvas.height = this.canvasRef()?.nativeElement.height;
 
-  // Create a copy of the image data to apply the convolution
-  const output = tempCtx.createImageData(this.canvasRef()?.nativeElement.width, this.canvasRef()?.nativeElement.height);
-  const outputData = output.data;
+      // Create a copy of the image data to apply the convolution
+      const output = tempCtx.createImageData(this.canvasRef()?.nativeElement.width, this.canvasRef()?.nativeElement.height);
+      const outputData = output.data;
 
-  for (let y = 0; y < this.canvasRef()?.nativeElement.height; y++) {
-    for (let x = 0; x < this.canvasRef()?.nativeElement.width; x++) {
-      let r = 0, g = 0, b = 0, a = 0;
-      for (let ky = -halfSide; ky <= halfSide; ky++) {
-        for (let kx = -halfSide; kx <= halfSide; kx++) {
-          const px = x + kx;
-          const py = y + ky;
-          if (px >= 0 && px < this.canvasRef()?.nativeElement.width && py >= 0 && py < this.canvasRef()?.nativeElement.height) {
-            const pos = (py * this.canvasRef()?.nativeElement.width + px) * 4;
-            const weight = kernel[(ky + halfSide) * side + (kx + halfSide)];
-            r += data[pos] * weight;
-            g += data[pos + 1] * weight;
-            b += data[pos + 2] * weight;
-            a += data[pos + 3] * weight;
+      for (let y = 0; y < this.canvasRef()?.nativeElement.height; y++) {
+        for (let x = 0; x < this.canvasRef()?.nativeElement.width; x++) {
+          let r = 0, g = 0, b = 0, a = 0;
+          for (let ky = -halfSide; ky <= halfSide; ky++) {
+            for (let kx = -halfSide; kx <= halfSide; kx++) {
+              const px = x + kx;
+              const py = y + ky;
+              if (px >= 0 && px < this.canvasRef()?.nativeElement.width && py >= 0 && py < this.canvasRef()?.nativeElement.height) {
+                const pos = (py * this.canvasRef()?.nativeElement.width + px) * 4;
+                const weight = kernel[(ky + halfSide) * side + (kx + halfSide)];
+                r += data[pos] * weight;
+                g += data[pos + 1] * weight;
+                b += data[pos + 2] * weight;
+                a += data[pos + 3] * weight;
+              }
+            }
           }
+          const i = (y * this.canvasRef()?.nativeElement.width + x) * 4;
+          outputData[i] = r;
+          outputData[i + 1] = g;
+          outputData[i + 2] = b;
+          outputData[i + 3] = a;
         }
       }
-      const i = (y * this.canvasRef()?.nativeElement.width + x) * 4;
-      outputData[i] = r;
-      outputData[i + 1] = g;
-      outputData[i + 2] = b;
-      outputData[i + 3] = a;
-    }
+
+      tempCanvas.width = this.canvasRef()?.nativeElement.width;
+      tempCanvas.height = this.canvasRef()?.nativeElement.height;
+      tempCtx.putImageData(output, 0, 0);
+      this.image.src = tempCanvas.toDataURL('image/png');
+      this.drawImage();
+      this.isLoading.set(false);
+    }, 0);
   }
 
-  tempCanvas.width = this.canvasRef()?.nativeElement.width;
-  tempCanvas.height = this.canvasRef()?.nativeElement.height;
-  tempCtx.putImageData(output, 0, 0);
-  this.image.src = tempCanvas.toDataURL('image/png');
-  this.drawImage();
-}
+  highPassSharpen(amount: number = 1.0) {
+    this.isLoading.set(true);
+    const imageData = this.ctx.getImageData(0, 0, this.canvasRef()?.nativeElement.width, this.canvasRef()?.nativeElement.height);
+    const data = imageData.data;
+    const output = this.ctx.createImageData(this.canvasRef()?.nativeElement.width, this.canvasRef()?.nativeElement.height);
+    const outputData = output.data;
 
-highPassSharpen( amount: number = 1.0) {
-  const imageData = this.ctx.getImageData(0, 0, this.canvasRef()?.nativeElement.width, this.canvasRef()?.nativeElement.height);
-  const data = imageData.data;
-  const output = this.ctx.createImageData(this.canvasRef()?.nativeElement.width, this.canvasRef()?.nativeElement.height);
-  const outputData = output.data;
+    // Create a copy of the original image data for high-pass filtering
+    const highPassData = new Float32Array(data.length);
 
-  // Create a copy of the original image data for high-pass filtering
-  const highPassData = new Float32Array(data.length);
+    // Calculate high-pass filter
+    for (let y = 1; y < this.canvasRef()?.nativeElement.height - 1; y++) {
+      for (let x = 1; x < this.canvasRef()?.nativeElement.width - 1; x++) {
+        for (let c = 0; c < 3; c++) { // R, G, B channels
+          const i = (y * this.canvasRef()?.nativeElement.width + x) * 4 + c;
+          const originalValue = data[i];
+          const averageValue =
+            (data[((y - 1) * this.canvasRef()?.nativeElement.width + x - 1) * 4 + c] +
+              data[((y - 1) * this.canvasRef()?.nativeElement.width + x) * 4 + c] +
+              data[((y - 1) * this.canvasRef()?.nativeElement.width + x + 1) * 4 + c] +
+              data[(y * this.canvasRef()?.nativeElement.width + x - 1) * 4 + c] +
+              data[(y * this.canvasRef()?.nativeElement.width + x + 1) * 4 + c] +
+              data[((y + 1) * this.canvasRef()?.nativeElement.width + x - 1) * 4 + c] +
+              data[((y + 1) * this.canvasRef()?.nativeElement.width + x) * 4 + c] +
+              data[((y + 1) * this.canvasRef()?.nativeElement.width + x + 1) * 4 + c]) / 8;
 
-  // Calculate high-pass filter
-  for (let y = 1; y < this.canvasRef()?.nativeElement.height - 1; y++) {
-    for (let x = 1; x < this.canvasRef()?.nativeElement.width - 1; x++) {
-      for (let c = 0; c < 3; c++) { // R, G, B channels
-        const i = (y * this.canvasRef()?.nativeElement.width + x) * 4 + c;
-        const originalValue = data[i];
-        const averageValue =
-          (data[((y - 1) * this.canvasRef()?.nativeElement.width + x - 1) * 4 + c] +
-            data[((y - 1) * this.canvasRef()?.nativeElement.width + x) * 4 + c] +
-            data[((y - 1) * this.canvasRef()?.nativeElement.width + x + 1) * 4 + c] +
-            data[(y * this.canvasRef()?.nativeElement.width + x - 1) * 4 + c] +
-            data[(y * this.canvasRef()?.nativeElement.width + x + 1) * 4 + c] +
-            data[((y + 1) * this.canvasRef()?.nativeElement.width + x - 1) * 4 + c] +
-            data[((y + 1) * this.canvasRef()?.nativeElement.width + x) * 4 + c] +
-            data[((y + 1) * this.canvasRef()?.nativeElement.width + x + 1) * 4 + c]) / 8;
-
-        highPassData[i] = originalValue - averageValue; // High-pass filter result
+          highPassData[i] = originalValue - averageValue; // High-pass filter result
+        }
       }
     }
+
+    // Apply high-pass filter to sharpen the image
+    for (let i = 0; i < data.length; i += 4) {
+      outputData[i] = Math.min(255, Math.max(0, data[i] + amount * highPassData[i]));
+      outputData[i + 1] = Math.min(255, Math.max(0, data[i + 1] + amount * highPassData[i + 1]));
+      outputData[i + 2] = Math.min(255, Math.max(0, data[i + 2] + amount * highPassData[i + 2]));
+      outputData[i + 3] = data[i + 3]; // Preserve alpha channel
+    }
+
+    // Draw the sharpened image back to the canvas
+    const tempCanvas = document.createElement('canvas');
+    const tempCtx = tempCanvas.getContext('2d')!;
+    tempCanvas.width = this.canvasRef()?.nativeElement.width;
+    tempCanvas.height = this.canvasRef()?.nativeElement.height;
+    tempCanvas.width = this.canvasRef()?.nativeElement.width;
+    tempCanvas.height = this.canvasRef()?.nativeElement.height;
+    tempCtx.putImageData(output, 0, 0);
+    this.image.src = tempCanvas.toDataURL('image/png');
+    this.drawImage();
+    this.isLoading.set(false);
   }
 
-  // Apply high-pass filter to sharpen the image
-  for (let i = 0; i < data.length; i += 4) {
-    outputData[i] = Math.min(255, Math.max(0, data[i] + amount * highPassData[i]));
-    outputData[i + 1] = Math.min(255, Math.max(0, data[i + 1] + amount * highPassData[i + 1]));
-    outputData[i + 2] = Math.min(255, Math.max(0, data[i + 2] + amount * highPassData[i + 2]));
-    outputData[i + 3] = data[i + 3]; // Preserve alpha channel
+
+  fix_dpi() {
+    let dpi = window.devicePixelRatio;
+
+    //get CSS height
+    //the + prefix casts it to an integer
+    //the slice method gets rid of "px"
+    let style_height = +getComputedStyle(this.canvasRef()?.nativeElement).getPropertyValue("height").slice(0, -2);
+    //get CSS width
+    let style_width = +getComputedStyle(this.canvasRef()?.nativeElement).getPropertyValue("width").slice(0, -2);
+    //scale the canvas
+    this.canvasRef()?.nativeElement.setAttribute('height', style_height * dpi);
+    this.canvasRef()?.nativeElement.setAttribute('width', style_width * dpi);
   }
 
-  // Draw the sharpened image back to the canvas
-  const tempCanvas = document.createElement('canvas');
-  const tempCtx = tempCanvas.getContext('2d')!;
-  tempCanvas.width = this.canvasRef()?.nativeElement.width;
-  tempCanvas.height = this.canvasRef()?.nativeElement.height;
-  tempCanvas.width = this.canvasRef()?.nativeElement.width;
-  tempCanvas.height = this.canvasRef()?.nativeElement.height;
-  tempCtx.putImageData(output, 0, 0);
-  this.image.src = tempCanvas.toDataURL('image/png');
-  this.drawImage();
-}
+  // ===========================================================================================================================
+
+  zoom(x: number, y: number, canvasX: number, canvasY: number, event: WheelEvent): void {
+    event.preventDefault();
+    const zoomFactor = event.deltaY * -0.001;
+    this.zoomScale.update(value => Math.min(Math.max(value + zoomFactor, 1), 10));
+    if (this.zoomScale() > 1) {
+      this.updateZoomWindow(x, y, canvasX, canvasY);
+    } else {
+      this.zoomCtx.clearRect(0, 0, this.zoomCanvasRef()?.nativeElement.width, this.zoomCanvasRef()?.nativeElement.height);
+    }
+  }
+
+  updateZoomWindow(canvasX: number, canvasY: number, x: number, y: number): void {
+    if (!this.image) return;
+
+    const zoomCanvas = this.zoomCanvasRef()?.nativeElement;
+    zoomCanvas.width = this.zoomSize();
+    zoomCanvas.height = this.zoomSize();
+
+    // Calculate the position to center the zoom window on the mouse cursor
+    const zoomCanvasX = canvasX - this.zoomSize() / 2;
+    const zoomCanvasY = canvasY - this.zoomSize() / 2;
+
+    // Set the position of the zoom canvas
+    zoomCanvas.style.position = 'absolute';
+    zoomCanvas.style.left = `${zoomCanvasX}px`;
+    zoomCanvas.style.top = `${zoomCanvasY}px`;
+
+
+    this.zoomCtx.clearRect(0, 0, zoomCanvas.width, zoomCanvas.height);
+    this.zoomCtx.drawImage(
+      this.canvasRef()?.nativeElement,
+      x - this.zoomSize() / (2 * this.zoomScale()),
+      y - this.zoomSize() / (2 * this.zoomScale()),
+      this.zoomSize() / this.zoomScale(),
+      this.zoomSize() / this.zoomScale(),
+      0,
+      0,
+      this.zoomSize(),
+      this.zoomSize()
+    );
+  }
+
+  private getCanvasCoordinates(event: MouseEvent): [number, number] {
+    const canvas = this.canvasRef()?.nativeElement;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (event.clientX - rect.left) * scaleX;
+    const y = (event.clientY - rect.top) * scaleY;
+    return [x, y];
+  }
 
 
 }
