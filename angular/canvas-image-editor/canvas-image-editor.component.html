@@ -39,7 +39,14 @@
       </button>
     }
   </div>
-  <canvas #canvas id="canvas" [width]="canvasWidth()" [height]="canvasHeight()"
-  [style.borderColor]="borderColor()" [style.borderStyle]="borderStyle()"
-  (mousedown)="onMouseDown($event)" (mousemove)="onMouseMove($event)" (mouseup)="onMouseUp()" (wheel)="onWheel($event)"></canvas>
+  <div class="relative" [style.width.px]="canvasWidth()" [style.height.px]="canvasHeight()">
+    <canvas #canvas id="canvas" [width]="canvasWidth()" [height]="canvasHeight()"
+    [style.width.px]="canvasWidth()" [style.height.px]="canvasHeight()"
+    [style.borderColor]="borderColor()" [style.borderStyle]="borderStyle()"
+    (mousedown)="onMouseDown($event)" (mousemove)="onMouseMove($event)" (mouseup)="onMouseUp()" (wheel)="onWheel($event)"></canvas>
+    <canvas #zoomCanvas (wheel)="onWheel($event)" (mousemove)="onMouseMove($event)" [width]="zoomSize()" [height]="zoomSize()" style="position: absolute;"></canvas>
+    @if(isLoading()) {
+      <div class="absolute loader origin-center" [style.left.px]="(canvasWidth() / 2) - 20" [style.top.px]="(canvasHeight() / 2) - 20"></div>
+    }
+  </div>
 </div>
