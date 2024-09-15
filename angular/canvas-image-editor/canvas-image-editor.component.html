@@ -1,32 +1,32 @@
 <div class="editor-container" [style.background-color]="backgroundColor()">
-  <div class="toolbar">
+  <div class="toolbar z-20">
     @if(!cropMode()) {
       @if(!base64()) {
         <button class="icon-button" (click)="upload.click()" [style.background]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()" title="Upload Image">
-          <i class="fa fa-upload"></i>
+          <i class="gg-software-upload"></i>
         </button>
         <input type="file" accept="image/*" #upload id="upload" (change)="onUpload($event)" style="display: none;" />
       }
       <button class="icon-button" (click)="toggleCropMode()" [style.background]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()" title="Toggle Crop">
-        <i class="fa fa-crop"></i>
+        <i class="gg-crop"></i>
       </button>
       <button class="icon-button" (click)="rotateImage()" [style.background]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()" title="Rotate 90°">
-        <i class="fa fa-undo"></i>
-      </button>
-      <button class="icon-button" (click)="sharpenImage()" [style.background]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()" title="Sharpen Image">
-        <i class="fa fa-adjust"></i>
-      </button>
-      <button class="icon-button" (click)="applyThreshold(200)" [style.background]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()" title="Apply Threshold">
-        <i class="fa fa-sliders"></i>
+        <i class="gg-redo"></i>
       </button>
       <button class="icon-button" (click)="highPassSharpen()" [style.background]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()" title="High Pass Sharpen">
-        <i class="fa fa-magic"></i>
+        <i class="gg-chevron-up"></i>
       </button>
-      <button class="icon-button" (click)="saveToComputer()" [style.background]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()" title="Save Image">
-        <i class="fa fa-download"></i>
+      <button class="icon-button" (click)="sharpenImage()" [style.background]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()" title="Sharpen Image">
+        <i class="gg-chevron-double-up"></i>
+      </button>
+      <button class="icon-button" (click)="applyThreshold(200)" [style.background]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()" title="Apply Threshold">
+        <i class="gg-edit-contrast"></i>
       </button>
       <button class="icon-button" (click)="resetImage()" [style.background]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()" title="Reset Image">
-        <i class="fa fa-refresh"></i>
+        <i class="gg-sync"></i>
+      </button>
+      <button class="icon-button" (click)="saveToComputer()" [style.background]="buttonsBackgroundColor()" [style.color]="buttonsTextColor()" title="Save Image">
+        <i class="gg-software-download"></i>
       </button>
 
     }
@@ -39,14 +39,15 @@
       </button>
     }
   </div>
-  <div class="relative" [style.width.px]="canvasWidth()" [style.height.px]="canvasHeight()">
+  <div class="relative z-10" [style.width.px]="canvasWidth()" [style.height.px]="canvasHeight()" >
     <canvas #canvas id="canvas" [width]="canvasWidth()" [height]="canvasHeight()"
     [style.width.px]="canvasWidth()" [style.height.px]="canvasHeight()"
     [style.borderColor]="borderColor()" [style.borderStyle]="borderStyle()"
     (mousedown)="onMouseDown($event)" (mousemove)="onMouseMove($event)" (mouseup)="onMouseUp()" (wheel)="onWheel($event)"></canvas>
     <canvas #zoomCanvas (wheel)="onWheel($event)" (mousemove)="onMouseMove($event)" [width]="zoomSize()" [height]="zoomSize()" style="position: absolute;"></canvas>
     @if(isLoading()) {
-      <div class="absolute loader origin-center" [style.left.px]="(canvasWidth() / 2) - 20" [style.top.px]="(canvasHeight() / 2) - 20"></div>
+      <div class="absolute z-400 bg-gray-300 bg-opacity-40 top-0 left-0" [style.width.px]="canvasWidth()" [style.height.px]="canvasHeight()"></div>
+      <div [class]="'loader-' + currentLoader() + ' absolute origin-center z-50'" [style.left.px]="(canvasWidth() / 2) - 20" [style.top.px]="(canvasHeight() / 2) - 20"></div>
     }
   </div>
 </div>
